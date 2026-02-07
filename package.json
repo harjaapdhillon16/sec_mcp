@@ -5,7 +5,7 @@
   "type": "module",
   "description": "SEC Filings + Earnings Intelligence MCP tool with Context middleware and Supabase pgvector",
   "scripts": {
-    "dev": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "ingest": "node src/workers/ingest.js",
     "precompute": "node src/workers/precompute.js",

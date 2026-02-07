@@ -29,8 +29,10 @@ import { embedText } from '../lib/embeddings.js';
 import { buildLatestIntel, buildComparisonIntel, computeMetricDeltas } from '../lib/intel.js';
 import { compareSections } from '../lib/compare.js';
 import { logger, withTimer } from '../lib/logger.js';
+import { buildLatestIntelFallback } from '../lib/fallbackIntel.js';
+import { enqueueIngest } from '../lib/ingestQueue.js';
 
-const resolveCompany = async ({ ticker, cik }) => {
+const resolveCompanyFromDb = async ({ ticker, cik }) => {
   const normalizedCik = normalizeCik(cik);
   const normalizedTicker = normalizeTicker(ticker);
   if (normalizedCik) {
@@ -41,6 +43,12 @@ const resolveCompany = async ({ ticker, cik }) => {
     const company = await getCompanyByTicker(normalizedTicker);
     if (company) return company;
   }
+  return null;
+};
+
+const resolveCompany = async ({ ticker, cik }) => {
+  const company = await resolveCompanyFromDb({ ticker, cik });
+  if (company) return company;
   throw new Error('Company not found. Provide a valid CIK or ticker already ingested.');
 };
 
@@ -54,10 +62,47 @@ const buildFactsForFiling = async (cik, filing) => {
   return await getLatestFactsByTag(cik, tags);
 };
 
-const jsonResponse = (structuredContent) => ({
-  content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
+const jsonResponse = (structuredContent, extraContent = []) => ({
+  content: [
+    { type: 'text', text: JSON.stringify(structuredContent, null, 2) },
+    ...extraContent
+  ],
   structuredContent
 });
+
+const createStreamLogger = (extra, { intervalMs = 500, maxBuffer = 800 } = {}) => {
+  if (!extra?.sendNotification) {
+    const noop = () => {};
+    noop.flush = () => {};
+    return noop;
+  }
+  let buffer = '';
+  let lastFlush = 0;
+  const flush = (force = false) => {
+    if (!buffer) return;
+    const now = Date.now();
+    if (!force && now - lastFlush < intervalMs && buffer.length < maxBuffer) return;
+    const chunk = buffer;
+    buffer = '';
+    lastFlush = now;
+    extra.sendNotification({
+      method: 'notifications/message',
+      params: {
+        level: 'info',
+        logger: 'mcp-fallback',
+        data: chunk
+      }
+    }).catch(() => {});
+  };
+  const streamLog = (message) => {
+    if (!message) return;
+    buffer += message;
+    const shouldFlush = message.includes('\n') || buffer.length >= maxBuffer;
+    flush(shouldFlush);
+  };
+  streamLog.flush = () => flush(true);
+  return streamLog;
+};
 
 export const createMcpServer = () => {
   const server = new McpServer({
@@ -74,15 +119,54 @@ export const createMcpServer = () => {
       inputSchema: LatestIntelInputSchema,
       outputSchema: LatestIntelOutputSchema
     },
-    async ({ ticker, cik, formType, includeSections }) => {
+    async ({ ticker, cik, formType, includeSections }, extra) => {
       const log = logger.child({ tool: 'sec_latest_filing_intel', ticker, cik, formType });
       const done = withTimer(log, 'sec_latest_filing_intel');
-      const company = await resolveCompany({ ticker, cik });
-      const filing = await getLatestFiling(company.cik, formType || null);
-      if (!filing) {
-        log.warn('No filings found');
-        throw new Error('No filings found for company');
+      const streamLog = createStreamLogger(extra);
+
+      let company = null;
+      try {
+        company = await resolveCompanyFromDb({ ticker, cik });
+      } catch (error) {
+        log.warn('Company lookup failed', { error: error?.message });
       }
+
+      let filing = null;
+      if (company) {
+        try {
+          filing = await getLatestFiling(company.cik, formType || null);
+        } catch (error) {
+          log.warn('Latest filing lookup failed', { error: error?.message });
+        }
+      }
+
+      if (!company || !filing) {
+        streamLog('[fallback] Company or filing missing in DB. Using fallback path.\n');
+        enqueueIngest({ ticker, cik, formType }).catch(() => {});
+        let fallback;
+        try {
+          fallback = await buildLatestIntelFallback({
+            ticker,
+            cik,
+            formType,
+            includeSections,
+            streamLog
+          });
+        } finally {
+          streamLog.flush();
+        }
+        const sourcesText = [
+          'Note: Fallback generated from SEC + web sources; background ingest/precompute running.',
+          'Sources:',
+          fallback.sources.primaryDocUrl ? `Filing: ${fallback.sources.primaryDocUrl}` : null,
+          fallback.sources.submissionsUrl ? `SEC submissions: ${fallback.sources.submissionsUrl}` : null,
+          fallback.sources.factsUrl ? `SEC company facts: ${fallback.sources.factsUrl}` : null
+        ].filter(Boolean).join('\n');
+        streamLog.flush();
+        done();
+        return jsonResponse(fallback.intel, [{ type: 'text', text: sourcesText }]);
+      }
+
       const existing = await getIntelReport(company.cik, filing.id, 'latest_summary');
       if (existing?.data_json) {
         done();

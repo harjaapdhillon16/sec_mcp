@@ -11,7 +11,7 @@ const app = createMcpExpressApp({
   allowedHosts: config.mcpAllowedHosts || undefined
 });
 
-app.use('/mcp', createContextMiddleware({ audience: config.contextAudience }));
+// app.use('/mcp', createContextMiddleware());
 
 app.post('/mcp', async (req, res) => {
   const requestId = createRequestId();
