@@ -1,5 +1,14 @@
 import * as z from 'zod/v4';
 
+export const ErrorOutputSchema = z.object({
+  status: z.literal('error'),
+  error: z.object({
+    message: z.string(),
+    code: z.string().nullable().optional(),
+    details: z.string().nullable().optional()
+  })
+});
+
 export const LatestIntelInputSchema = {
   ticker: z.string().optional().describe('Ticker symbol (e.g., AAPL)'),
   cik: z.string().optional().describe('CIK (10-digit)') ,
@@ -17,7 +26,7 @@ export const MetricSchema = z.object({
   fp: z.string().nullable()
 });
 
-export const LatestIntelOutputSchema = z.object({
+const LatestIntelSuccessSchema = z.object({
   cik: z.string(),
   ticker: z.string().nullable(),
   formType: z.string(),
@@ -38,6 +47,7 @@ export const LatestIntelOutputSchema = z.object({
     length: z.number()
   }))
 });
+export const LatestIntelOutputSchema = z.union([LatestIntelSuccessSchema, ErrorOutputSchema]);
 
 export const CompareInputSchema = {
   ticker: z.string().optional(),
@@ -45,7 +55,7 @@ export const CompareInputSchema = {
   formType: z.enum(['10-K', '10-Q']).optional()
 };
 
-export const CompareOutputSchema = z.object({
+const CompareSuccessSchema = z.object({
   cik: z.string(),
   ticker: z.string().nullable(),
   current: z.object({
@@ -78,6 +88,7 @@ export const CompareOutputSchema = z.object({
   })),
   summary: z.string()
 });
+export const CompareOutputSchema = z.union([CompareSuccessSchema, ErrorOutputSchema]);
 
 export const SemanticSearchInputSchema = {
   ticker: z.string().optional(),
@@ -87,7 +98,7 @@ export const SemanticSearchInputSchema = {
   limit: z.number().optional().default(6)
 };
 
-export const SemanticSearchOutputSchema = z.object({
+const SemanticSearchSuccessSchema = z.object({
   cik: z.string(),
   ticker: z.string().nullable(),
   query: z.string(),
@@ -101,6 +112,7 @@ export const SemanticSearchOutputSchema = z.object({
     snippet: z.string()
   }))
 });
+export const SemanticSearchOutputSchema = z.union([SemanticSearchSuccessSchema, ErrorOutputSchema]);
 
 export const EarningsInputSchema = {
   ticker: z.string().optional(),
@@ -109,7 +121,7 @@ export const EarningsInputSchema = {
   quarter: z.number().optional()
 };
 
-export const EarningsOutputSchema = z.object({
+const EarningsSuccessSchema = z.object({
   cik: z.string(),
   ticker: z.string().nullable(),
   status: z.enum(['ok', 'not_configured', 'not_found']),
@@ -119,3 +131,4 @@ export const EarningsOutputSchema = z.object({
   guidanceChanges: z.array(z.string()),
   keyQuotes: z.array(z.string())
 });
+export const EarningsOutputSchema = z.union([EarningsSuccessSchema, ErrorOutputSchema]);
