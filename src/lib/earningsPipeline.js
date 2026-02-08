@@ -9,7 +9,6 @@ import {
   insertEarningsChunks,
   upsertEarningsIntel
 } from '../db/queries.js';
-import { logger } from './logger.js';
 
 export const ingestEarningsTranscript = async ({
   cik,
@@ -21,7 +20,6 @@ export const ingestEarningsTranscript = async ({
   source
 }) => {
   if (!transcriptText) {
-    logger.warn('No transcript text provided', { cik, ticker, source });
     return null;
   }
 
@@ -50,15 +48,6 @@ export const ingestEarningsTranscript = async ({
 
   const intel = buildEarningsIntel(transcriptText);
   await upsertEarningsIntel({ callId: call.id, dataJson: intel });
-
-  logger.info('Earnings transcript stored', {
-    cik,
-    ticker,
-    fiscalYear,
-    fiscalQuarter,
-    chunks: rows.length,
-    source
-  });
 
   return call;
 };

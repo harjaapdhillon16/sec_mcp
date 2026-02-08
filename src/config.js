@@ -35,12 +35,3 @@ export const config = {
   ingestSectionConcurrency: parseIntSafe(process.env.INGEST_SECTION_CONCURRENCY, 3),
   precomputeConcurrency: parseIntSafe(process.env.PRECOMPUTE_CONCURRENCY, 3)
 };
-
-if (!config.databaseUrl) {
-  // eslint-disable-next-line no-console
-  console.warn('DATABASE_URL is not set. Server will fail on DB access.');
-}
-if (!config.secUserAgent) {
-  // eslint-disable-next-line no-console
-  console.warn('SEC_USER_AGENT is not set. SEC requests will fail.');
-}

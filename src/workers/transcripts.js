@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import minimist from 'minimist';
 import { normalizeTicker, normalizeCik } from '../lib/utils.js';
 import { ingestEarningsTranscript } from '../lib/earningsPipeline.js';
-import { logger, withTimer } from '../lib/logger.js';
+import { config } from '../config.js';
 import {
   upsertCompany,
   getCompanyByTicker,
@@ -44,8 +44,6 @@ const resolveCompany = async (ticker, cik) => {
 
 const run = async () => {
   if (!config.databaseUrl) throw new Error('DATABASE_URL is required');
-  const log = logger.child({ worker: 'transcripts', ticker: tickerArg, cik: cikArg });
-  const done = withTimer(log, 'transcripts');
   const data = await loadTranscript();
   const ticker = data.ticker ? normalizeTicker(data.ticker) : tickerArg;
   const cik = data.cik ? normalizeCik(data.cik) : cikArg;
@@ -66,11 +64,8 @@ const run = async () => {
     source: data.source || 'file'
   });
 
-  log.info('Transcript processed', { ticker: company.ticker, cik: company.cik });
-  done();
 };
 
 run().catch(error => {
-  console.error('Transcript ingest failed:', error);
   process.exit(1);
 });

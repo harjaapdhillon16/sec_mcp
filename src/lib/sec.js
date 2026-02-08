@@ -1,6 +1,5 @@
 import { config } from '../config.js';
 import { sleep } from './utils.js';
-import { logger } from './logger.js';
 
 let lastRequestAt = 0;
 let secQueue = Promise.resolve();
@@ -16,7 +15,6 @@ const secFetch = async (url, options = {}) => {
     throw new Error('SEC_USER_AGENT is required for SEC requests');
   }
   return enqueueSec(async () => {
-    logger.debug('SEC request', { url });
     const now = Date.now();
     const elapsed = now - lastRequestAt;
     if (elapsed < config.secMinIntervalMs) {

@@ -8,7 +8,6 @@ import { chunkText } from '../lib/chunker.js';
 import { embedTexts } from '../lib/embeddings.js';
 import { sha256, cleanText, normalizeTicker } from '../lib/utils.js';
 import { KEY_TAGS } from '../lib/constants.js';
-import { logger, withTimer } from '../lib/logger.js';
 import { fetchTranscriptDates, fetchTranscript, pickLatestTranscriptDate, extractTranscriptText } from '../lib/fmp.js';
 import { ingestEarningsTranscript } from '../lib/earningsPipeline.js';
 import {
@@ -109,14 +108,10 @@ export const ingestCompany = async ({
     ? forms
     : ['10-K', '10-Q', '8-K'];
   const force = Boolean(forceFlag);
-  const log = logger.child({ worker: 'ingest', ticker: tickerArg, cik: cikArg });
-  const done = withTimer(log, 'ingest');
   const cikResolved = await resolveCik({ tickerArg, cikArg });
-  log.info('Resolved CIK', { cik: cikResolved });
   const submissions = await getSubmissions(cikResolved);
   const companyName = submissions?.name || null;
   await upsertCompany({ cik: cikResolved, ticker: tickerArg, name: companyName });
-  log.info('Loaded submissions', { companyName });
   const companyRecord = await getCompanyByCik(cikResolved);
   const transcriptTicker = tickerArg || companyRecord?.ticker || null;
 
@@ -145,7 +140,6 @@ export const ingestCompany = async ({
     if (existingSection && existingSection.content_hash === hash && !force) {
       return null;
     }
-    log.info('Embedding section', { sectionType, length: cleaned.length });
     await upsertFilingSection({
       filingId: filing.id,
       sectionType,
@@ -170,7 +164,6 @@ export const ingestCompany = async ({
   };
 
   const processFiling = async (filingMeta) => {
-    log.info('Processing filing', { accession: filingMeta.accession, formType: filingMeta.formType });
     const existing = await getFilingByAccession(filingMeta.accession);
     if (existing && !force) return null;
     const primaryDocUrl = filingMeta.primaryDocument
@@ -206,11 +199,8 @@ export const ingestCompany = async ({
   const factsJson = await getCompanyFacts(cikResolved);
   const facts = buildFacts(cikResolved, factsJson, filings);
   await insertXbrlFacts(facts);
-  log.info('Inserted XBRL facts', { count: facts.length });
-
   if (config.fmpApiKey && transcriptTicker) {
     try {
-      log.info('Fetching FMP transcripts', { ticker: transcriptTicker });
       const list = await fetchTranscriptDates(transcriptTicker);
       const latest = pickLatestTranscriptDate(list);
       if (latest?.year && latest?.quarter) {
@@ -229,18 +219,10 @@ export const ingestCompany = async ({
           transcriptText,
           source: 'fmp'
         });
-      } else {
-        log.info('No FMP transcripts found for ticker', { ticker: transcriptTicker });
       }
     } catch (error) {
-      log.warn('FMP transcript fetch failed', { error: error?.message });
     }
-  } else {
-    log.info('Skipping FMP transcripts (missing FMP_API_KEY or ticker)');
   }
-
-  log.info('Ingestion complete', { cik: cikResolved });
-  done();
 };
 
 const ingest = async () => {
@@ -256,7 +238,6 @@ const ingest = async () => {
 const isCli = import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isCli) {
   ingest().catch(error => {
-    console.error('Ingestion failed:', error);
     process.exit(1);
   });
 }

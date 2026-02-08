@@ -1,5 +1,4 @@
 import { config } from '../config.js';
-import { logger } from './logger.js';
 
 const baseUrl = 'https://financialmodelingprep.com/stable';
 
@@ -13,7 +12,6 @@ const fmpFetch = async (path, params = {}) => {
     url.searchParams.set(key, value);
   }
   url.searchParams.set('apikey', config.fmpApiKey);
-  logger.debug('FMP request', { url: url.toString().replace(config.fmpApiKey, '***') });
   const response = await fetch(url.toString());
   if (!response.ok) {
     const text = await response.text().catch(() => null);
@@ -150,7 +148,6 @@ export const fetchLatestTranscript = async (symbol) => {
       quarter: latest.quarter
     };
   } catch (error) {
-    logger.error('Failed to fetch latest transcript', { symbol, error });
     throw error;
   }
 };

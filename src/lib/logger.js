@@ -12,7 +12,23 @@ const normalizeLevel = (level) => {
   return LEVELS[key] ? key : 'info';
 };
 
-const redactedKeys = ['authorization', 'api_key', 'apikey', 'token', 'password', 'secret'];
+const redactedKeys = [
+  'authorization',
+  'api_key',
+  'apikey',
+  'token',
+  'password',
+  'secret',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'x-context-token',
+  'x-context-signature',
+  'x-context-authorization',
+  'access-token',
+  'refresh-token',
+  'private-key'
+];
 
 const redactValue = (value) => {
   if (value == null) return value;
@@ -39,10 +55,27 @@ const redact = (obj) => {
   return out;
 };
 
+const normalizeMeta = (meta) => {
+  if (!meta || typeof meta !== 'object') return meta;
+  const out = { ...meta };
+  const error = out.error;
+  if (error instanceof Error) {
+    out.error = error.message;
+    if (error.stack) out.errorStack = error.stack;
+    if (error.code) out.errorCode = error.code;
+  } else if (error && typeof error === 'object' && error.message) {
+    out.error = error.message;
+    if (error.stack) out.errorStack = error.stack;
+    if (error.code) out.errorCode = error.code;
+  }
+  return out;
+};
+
 const format = (level, message, meta) => {
   const time = new Date().toISOString();
-  if (meta && Object.keys(meta).length) {
-    return `${time} ${level.toUpperCase()} ${message} ${JSON.stringify(redact(meta))}`;
+  const normalized = normalizeMeta(meta);
+  if (normalized && Object.keys(normalized).length) {
+    return `${time} ${level.toUpperCase()} ${message} ${JSON.stringify(redact(normalized))}`;
   }
   return `${time} ${level.toUpperCase()} ${message}`;
 };

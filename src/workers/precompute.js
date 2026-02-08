@@ -6,7 +6,6 @@ import { normalizeTicker } from '../lib/utils.js';
 import { KEY_TAGS, DEFAULT_SECTIONS } from '../lib/constants.js';
 import { compareSections } from '../lib/compare.js';
 import { buildLatestIntel, buildComparisonIntel, computeMetricDeltas } from '../lib/intel.js';
-import { logger, withTimer } from '../lib/logger.js';
 import {
   normalizeCik,
   getCompanyByTicker,
@@ -68,8 +67,6 @@ const buildFactsForFiling = async (cik, filing) => {
 };
 
 export const precomputeCompany = async (company) => {
-  const log = logger.child({ worker: 'precompute', ticker: company.ticker, cik: company.cik });
-  const done = withTimer(log, 'precompute');
   const latestFiling = await getLatestFiling(company.cik, null);
   if (!latestFiling) return;
   const [previousFiling, sections] = await Promise.all([
@@ -145,7 +142,6 @@ export const precomputeCompany = async (company) => {
       dataJson: comparisonIntel
     })
   ]);
-  done();
 };
 
 export const precomputeForTicker = async (ticker) => {
@@ -153,21 +149,18 @@ export const precomputeForTicker = async (ticker) => {
   const company = await getCompanyByTicker(normalized);
   if (!company) throw new Error(`Company not found for ticker ${normalized}`);
   await precomputeCompany(company);
-  logger.info('Precomputed intel', { ticker: company.ticker, cik: company.cik });
 };
 
 const run = async () => {
   const companies = await resolveCompanies();
   await runBatches(companies, config.precomputeConcurrency, async (company) => {
     await precomputeCompany(company);
-    logger.info('Precomputed intel', { ticker: company.ticker, cik: company.cik });
   });
 };
 
 const isCli = import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isCli) {
   run().catch(error => {
-    console.error('Precompute failed:', error);
     process.exit(1);
   });
 }

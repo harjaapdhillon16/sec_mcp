@@ -2,7 +2,6 @@ import { ingestCompany } from '../workers/ingest.js';
 import { precomputeCompany } from '../workers/precompute.js';
 import { getCompanyByCik, getCompanyByTicker } from '../db/queries.js';
 import { normalizeCik, normalizeTicker } from './utils.js';
-import { logger } from './logger.js';
 
 const inflight = new Map();
 const queue = [];
@@ -56,16 +55,13 @@ export const enqueueIngest = ({ ticker, cik, formType }) => {
       resolve,
       job: async () => {
         try {
-          logger.info('Background ingest started', { ticker, cik, formType });
           const forms = formType ? [formType] : null;
           await ingestCompany({ ticker, cik, forms });
           const company = await resolveCompany({ ticker, cik });
           if (company) {
             await precomputeCompany(company);
           }
-          logger.info('Background ingest completed', { ticker, cik });
         } catch (error) {
-          logger.warn('Background ingest failed', { ticker, cik, error: error?.message });
         }
       }
     });

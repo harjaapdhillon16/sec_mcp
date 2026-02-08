@@ -1,5 +1,4 @@
 import pg from 'pg';
-import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
 
 const { Pool } = pg;
@@ -10,11 +9,9 @@ const pool = new Pool({
 });
 
 pool.on('connect', () => {
-  logger.debug('DB connection acquired');
 });
 
 pool.on('error', (err) => {
-  logger.error('DB pool error', { error: err?.message });
 });
 
 export const db = {

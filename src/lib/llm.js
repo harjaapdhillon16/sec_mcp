@@ -1,5 +1,4 @@
 import { config } from '../config.js';
-import { logger } from './logger.js';
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -49,8 +48,8 @@ export const streamChatCompletion = async ({
     if (onDelta) {
       try {
         onDelta(delta);
-      } catch (error) {
-        logger.warn('LLM delta handler failed', { error: error?.message });
+      } catch {
+        // ignore delta handler errors
       }
     }
   };
@@ -76,8 +75,8 @@ export const streamChatCompletion = async ({
           || payload?.choices?.[0]?.message?.content
           || '';
         handleDelta(delta);
-      } catch (error) {
-        logger.warn('Failed to parse LLM stream chunk', { error: error?.message });
+      } catch {
+        // ignore parse errors
       }
     }
   }

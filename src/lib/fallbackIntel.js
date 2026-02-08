@@ -1,5 +1,4 @@
 import { config } from '../config.js';
-import { logger } from './logger.js';
 import { getCompanyByCik, getCompanyByTicker } from '../db/queries.js';
 import { getCompanyTickerMap, getSubmissions, getCompanyFacts, fetchFilingDocument, buildPrimaryDocUrl } from './sec.js';
 import { htmlToText, extractSections } from './filingParser.js';
@@ -18,8 +17,8 @@ const safeStream = (streamLog, message) => {
   if (!streamLog) return;
   try {
     streamLog(message);
-  } catch (error) {
-    logger.warn('Stream log failed', { error: error?.message });
+  } catch {
+    // ignore stream errors
   }
 };
 
@@ -35,8 +34,8 @@ const resolveCompanyFromDb = async ({ ticker, cik }) => {
       const company = await getCompanyByTicker(normalizedTicker);
       if (company) return company;
     }
-  } catch (error) {
-    logger.warn('DB company lookup failed', { error: error?.message });
+  } catch {
+    // ignore lookup errors
   }
   return null;
 };
@@ -277,7 +276,7 @@ const enrichWithLlm = async ({
   const user = buildPrompt({ company, filing, facts, sections, webPages, maxTokens });
 
   if (estimateTokens(user) > maxTokens) {
-    logger.warn('LLM prompt exceeds token estimate', { tokens: estimateTokens(user), maxTokens });
+    // continue; prompt will be trimmed downstream if needed
   }
 
   safeStream(streamLog, '[fallback] Generating summary via LLM...\n');
@@ -290,7 +289,6 @@ const enrichWithLlm = async ({
       onDelta: (delta) => safeStream(streamLog, delta)
     });
   } catch (error) {
-    logger.warn('LLM summarization failed', { error: error?.message });
     safeStream(streamLog, '\n[fallback] LLM summarization failed, using heuristic output.\n');
     return baseIntel;
   }

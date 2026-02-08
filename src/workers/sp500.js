@@ -3,7 +3,6 @@ import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import minimist from 'minimist';
-import { logger } from '../lib/logger.js';
 import { normalizeTicker } from '../lib/utils.js';
 
 const args = minimist(process.argv.slice(2));
@@ -46,7 +45,6 @@ const main = async () => {
   }
 
   const tickers = await loadTickers(filePath);
-  logger.info('Loaded tickers', { count: tickers.length, filePath, companyConcurrency });
 
   const { ingestCompany } = await import(new URL('./ingest.js', import.meta.url));
   const { precomputeForTicker } = await import(new URL('./precompute.js', import.meta.url));
@@ -57,7 +55,6 @@ const main = async () => {
     const attempt = async (value) => {
       await ingestCompany({ ticker: value });
       await precomputeForTicker(value);
-      logger.info('Completed ticker', { ticker: value });
     };
     try {
       await attempt(ticker);
@@ -65,7 +62,6 @@ const main = async () => {
       const message = error?.message || String(error);
       if (message.includes('Ticker') && ticker.includes('.')) {
         const alt = ticker.replace(/\./g, '-');
-        logger.warn('Retrying ticker with dash', { ticker, alt });
         await attempt(alt);
         return;
       }
@@ -78,19 +74,14 @@ const main = async () => {
       await handleTicker(ticker);
     } catch (error) {
       failures.push({ ticker, error: error?.message || String(error) });
-      logger.error('Ticker failed', { ticker, error: error?.message || String(error) });
     }
   });
 
   if (failures.length) {
-    logger.warn('Completed with failures', { failed: failures.length });
     process.exitCode = 1;
-  } else {
-    logger.info('Completed all tickers');
   }
 };
 
 main().catch(error => {
-  console.error('SP500 ingest failed:', error);
   process.exit(1);
 });

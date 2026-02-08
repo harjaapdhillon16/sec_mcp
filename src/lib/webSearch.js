@@ -1,7 +1,6 @@
 import { config } from '../config.js';
 import { htmlToText } from './filingParser.js';
 import { cleanText, estimateTokens } from './utils.js';
-import { logger } from './logger.js';
 
 const buildTimeoutSignal = (timeoutMs) => {
   if (!timeoutMs) return null;
@@ -70,7 +69,6 @@ export const searchWeb = async (query, { maxResults } = {}) => {
       : [];
     return { results };
   } catch (error) {
-    logger.warn('Tavily search failed', { error: error?.message });
     return { results: [] };
   } finally {
     if (timeout?.timeoutId) clearTimeout(timeout.timeoutId);
@@ -94,7 +92,6 @@ export const fetchPageText = async (url, { maxTokens, timeoutMs } = {}) => {
     const trimmed = maxTokens ? trimToTokens(extracted, maxTokens) : extracted;
     return trimmed;
   } catch (error) {
-    logger.warn('Page fetch failed', { url, error: error?.message });
     return '';
   } finally {
     if (timeout?.timeoutId) clearTimeout(timeout.timeoutId);

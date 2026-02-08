@@ -1,134 +1,280 @@
-import * as z from 'zod/v4';
-
-export const ErrorOutputSchema = z.object({
-  status: z.literal('error'),
-  error: z.object({
-    message: z.string(),
-    code: z.string().nullable().optional(),
-    details: z.string().nullable().optional()
-  })
-});
+export const ErrorOutputSchema = {
+  type: 'object',
+  properties: {
+    status: { const: 'error' },
+    error: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        code: { type: ['string', 'null'] },
+        details: { type: ['string', 'null'] }
+      },
+      required: ['message']
+    }
+  },
+  required: ['status', 'error']
+};
 
 export const LatestIntelInputSchema = {
-  ticker: z.string().optional().describe('Ticker symbol (e.g., AAPL)'),
-  cik: z.string().optional().describe('CIK (10-digit)') ,
-  formType: z.enum(['10-K', '10-Q', '8-K']).optional().describe('Filing form type'),
-  includeSections: z.boolean().optional().default(false)
+  type: 'object',
+  properties: {
+    ticker: { type: 'string', description: 'Ticker symbol (e.g., AAPL)' },
+    cik: { type: 'string', description: 'CIK (10-digit)' },
+    formType: {
+      type: 'string',
+      enum: ['10-K', '10-Q', '8-K'],
+      description: 'Filing form type'
+    },
+    includeSections: { type: 'boolean', default: false }
+  }
 };
 
-export const MetricSchema = z.object({
-  tag: z.string(),
-  label: z.string(),
-  value: z.number(),
-  unit: z.string().nullable(),
-  periodEnd: z.string().nullable(),
-  fy: z.number().nullable(),
-  fp: z.string().nullable()
-});
+export const MetricSchema = {
+  type: 'object',
+  properties: {
+    tag: { type: 'string' },
+    label: { type: 'string' },
+    value: { type: 'number' },
+    unit: { type: ['string', 'null'] },
+    periodEnd: { type: ['string', 'null'] },
+    fy: { type: ['number', 'null'] },
+    fp: { type: ['string', 'null'] }
+  },
+  required: ['tag', 'label', 'value']
+};
 
-const LatestIntelSuccessSchema = z.object({
-  cik: z.string(),
-  ticker: z.string().nullable(),
-  formType: z.string(),
-  filingDate: z.string(),
-  reportPeriod: z.string().nullable(),
-  primaryDocUrl: z.string().nullable(),
-  keyMetrics: z.array(MetricSchema),
-  takeaways: z.array(z.string()),
-  riskSummary: z.object({
-    summary: z.string(),
-    highlights: z.array(z.string()),
-    sentimentScore: z.number().nullable()
-  }),
-  signals: z.array(z.string()),
-  sections: z.array(z.object({
-    sectionType: z.string(),
-    summary: z.string(),
-    length: z.number()
-  }))
-});
-export const LatestIntelOutputSchema = z.union([LatestIntelSuccessSchema, ErrorOutputSchema]);
+const LatestIntelSuccessSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    formType: { type: 'string' },
+    filingDate: { type: 'string' },
+    reportPeriod: { type: ['string', 'null'] },
+    primaryDocUrl: { type: ['string', 'null'] },
+    keyMetrics: { type: 'array', items: MetricSchema },
+    takeaways: { type: 'array', items: { type: 'string' } },
+    riskSummary: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+        highlights: { type: 'array', items: { type: 'string' } },
+        sentimentScore: { type: ['number', 'null'] }
+      },
+      required: ['summary', 'highlights', 'sentimentScore']
+    },
+    signals: { type: 'array', items: { type: 'string' } },
+    sections: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          sectionType: { type: 'string' },
+          summary: { type: 'string' },
+          length: { type: 'number' }
+        },
+        required: ['sectionType', 'summary', 'length']
+      }
+    }
+  },
+  required: [
+    'cik',
+    'ticker',
+    'formType',
+    'filingDate',
+    'reportPeriod',
+    'primaryDocUrl',
+    'keyMetrics',
+    'takeaways',
+    'riskSummary',
+    'signals',
+    'sections'
+  ]
+};
+
+export const LatestIntelOutputSchema = {
+  oneOf: [LatestIntelSuccessSchema, ErrorOutputSchema]
+};
 
 export const CompareInputSchema = {
-  ticker: z.string().optional(),
-  cik: z.string().optional(),
-  formType: z.enum(['10-K', '10-Q']).optional()
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    formType: { type: 'string', enum: ['10-K', '10-Q'] }
+  }
 };
 
-const CompareSuccessSchema = z.object({
-  cik: z.string(),
-  ticker: z.string().nullable(),
-  current: z.object({
-    filingId: z.string(),
-    formType: z.string(),
-    filingDate: z.string(),
-    reportPeriod: z.string().nullable()
-  }),
-  previous: z.object({
-    filingId: z.string(),
-    formType: z.string(),
-    filingDate: z.string(),
-    reportPeriod: z.string().nullable()
-  }),
-  metricDeltas: z.array(z.object({
-    tag: z.string(),
-    label: z.string(),
-    unit: z.string().nullable(),
-    currentValue: z.number(),
-    previousValue: z.number(),
-    delta: z.number(),
-    deltaPct: z.number().nullable()
-  })),
-  narrativeChanges: z.array(z.object({
-    sectionType: z.string(),
-    newItems: z.array(z.string()),
-    removedItems: z.array(z.string()),
-    intensifiedItems: z.array(z.string()),
-    citations: z.array(z.string())
-  })),
-  summary: z.string()
-});
-export const CompareOutputSchema = z.union([CompareSuccessSchema, ErrorOutputSchema]);
+const CompareSuccessSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    current: {
+      type: 'object',
+      properties: {
+        filingId: { type: 'string' },
+        formType: { type: 'string' },
+        filingDate: { type: 'string' },
+        reportPeriod: { type: ['string', 'null'] }
+      },
+      required: ['filingId', 'formType', 'filingDate', 'reportPeriod']
+    },
+    previous: {
+      type: 'object',
+      properties: {
+        filingId: { type: 'string' },
+        formType: { type: 'string' },
+        filingDate: { type: 'string' },
+        reportPeriod: { type: ['string', 'null'] }
+      },
+      required: ['filingId', 'formType', 'filingDate', 'reportPeriod']
+    },
+    metricDeltas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          tag: { type: 'string' },
+          label: { type: 'string' },
+          unit: { type: ['string', 'null'] },
+          currentValue: { type: 'number' },
+          previousValue: { type: 'number' },
+          delta: { type: 'number' },
+          deltaPct: { type: ['number', 'null'] }
+        },
+        required: [
+          'tag',
+          'label',
+          'unit',
+          'currentValue',
+          'previousValue',
+          'delta',
+          'deltaPct'
+        ]
+      }
+    },
+    narrativeChanges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          sectionType: { type: 'string' },
+          newItems: { type: 'array', items: { type: 'string' } },
+          removedItems: { type: 'array', items: { type: 'string' } },
+          intensifiedItems: { type: 'array', items: { type: 'string' } },
+          citations: { type: 'array', items: { type: 'string' } }
+        },
+        required: [
+          'sectionType',
+          'newItems',
+          'removedItems',
+          'intensifiedItems',
+          'citations'
+        ]
+      }
+    },
+    summary: { type: 'string' }
+  },
+  required: [
+    'cik',
+    'ticker',
+    'current',
+    'previous',
+    'metricDeltas',
+    'narrativeChanges',
+    'summary'
+  ]
+};
+
+export const CompareOutputSchema = {
+  oneOf: [CompareSuccessSchema, ErrorOutputSchema]
+};
 
 export const SemanticSearchInputSchema = {
-  ticker: z.string().optional(),
-  cik: z.string().optional(),
-  query: z.string().describe('Search query'),
-  sectionType: z.string().optional(),
-  limit: z.number().optional().default(6)
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    query: { type: 'string', description: 'Search query' },
+    sectionType: { type: 'string' },
+    limit: { type: 'number', default: 6 }
+  },
+  required: ['query']
 };
 
-const SemanticSearchSuccessSchema = z.object({
-  cik: z.string(),
-  ticker: z.string().nullable(),
-  query: z.string(),
-  matches: z.array(z.object({
-    chunkId: z.string(),
-    filingId: z.string(),
-    filingDate: z.string(),
-    formType: z.string(),
-    sectionType: z.string(),
-    score: z.number(),
-    snippet: z.string()
-  }))
-});
-export const SemanticSearchOutputSchema = z.union([SemanticSearchSuccessSchema, ErrorOutputSchema]);
+const SemanticSearchSuccessSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    query: { type: 'string' },
+    matches: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          chunkId: { type: 'string' },
+          filingId: { type: 'string' },
+          filingDate: { type: 'string' },
+          formType: { type: 'string' },
+          sectionType: { type: 'string' },
+          score: { type: 'number' },
+          snippet: { type: 'string' }
+        },
+        required: [
+          'chunkId',
+          'filingId',
+          'filingDate',
+          'formType',
+          'sectionType',
+          'score',
+          'snippet'
+        ]
+      }
+    }
+  },
+  required: ['cik', 'ticker', 'query', 'matches']
+};
+
+export const SemanticSearchOutputSchema = {
+  oneOf: [SemanticSearchSuccessSchema, ErrorOutputSchema]
+};
 
 export const EarningsInputSchema = {
-  ticker: z.string().optional(),
-  cik: z.string().optional(),
-  year: z.number().optional(),
-  quarter: z.number().optional()
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    year: { type: 'number' },
+    quarter: { type: 'number' }
+  }
 };
 
-const EarningsSuccessSchema = z.object({
-  cik: z.string(),
-  ticker: z.string().nullable(),
-  status: z.enum(['ok', 'not_configured', 'not_found']),
-  callDate: z.string().nullable(),
-  summary: z.string().nullable(),
-  tone: z.string().nullable(),
-  guidanceChanges: z.array(z.string()),
-  keyQuotes: z.array(z.string())
-});
-export const EarningsOutputSchema = z.union([EarningsSuccessSchema, ErrorOutputSchema]);
+const EarningsSuccessSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    status: { type: 'string', enum: ['ok', 'not_configured', 'not_found'] },
+    callDate: { type: ['string', 'null'] },
+    summary: { type: ['string', 'null'] },
+    tone: { type: ['string', 'null'] },
+    guidanceChanges: { type: 'array', items: { type: 'string' } },
+    keyQuotes: { type: 'array', items: { type: 'string' } }
+  },
+  required: [
+    'cik',
+    'ticker',
+    'status',
+    'callDate',
+    'summary',
+    'tone',
+    'guidanceChanges',
+    'keyQuotes'
+  ]
+};
+
+export const EarningsOutputSchema = {
+  oneOf: [EarningsSuccessSchema, ErrorOutputSchema]
+};
