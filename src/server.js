@@ -68,7 +68,7 @@ const methodNotAllowed = (req, res) => {
     },
     id: null
   };
-  res.status(405).json(payload);
+  res.status(200).json(payload);
 };
 
 app.get('/mcp', methodNotAllowed);
