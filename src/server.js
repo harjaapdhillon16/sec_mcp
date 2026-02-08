@@ -3,7 +3,7 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createContextMiddleware } from '@ctxprotocol/sdk';
 import { config } from './config.js';
-import { logger } from './lib/logger.js';
+import { logger, createRequestId } from './lib/logger.js';
 import { createMcpServer } from './mcp/server.js';
 
 const app = createMcpExpressApp({
@@ -11,9 +11,13 @@ const app = createMcpExpressApp({
   allowedHosts: config.mcpAllowedHosts || undefined
 });
 
-app.use(createContextMiddleware({ audience: config.contextAudience }));
+app.use(createContextMiddleware());
 
 app.post('/mcp', async (req, res) => {
+  const requestId = createRequestId();
+  const reqLogger = logger.child({ requestId });
+  const start = Date.now();
+  reqLogger.info('MCP request received', { method: req.body?.method });
   const server = createMcpServer();
   try {
     const transport = new StreamableHTTPServerTransport({
@@ -22,48 +26,43 @@ app.post('/mcp', async (req, res) => {
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
     res.on('close', () => {
+      reqLogger.info('MCP request completed', { durationMs: Date.now() - start });
       transport.close();
       server.close();
     });
   } catch (error) {
+    reqLogger.error('Error handling MCP request', { error: error?.message });
     if (!res.headersSent) {
-      const payload = {
+      res.status(500).json({
         jsonrpc: '2.0',
         error: {
           code: -32603,
           message: 'Internal server error'
         },
         id: null
-      };
-      res.status(500).json(payload);
+      });
     }
   }
 });
 
 const methodNotAllowed = (req, res) => {
-  const payload = {
+  res.writeHead(405).end(JSON.stringify({
     jsonrpc: '2.0',
     error: {
       code: -32000,
       message: 'Method not allowed.'
     },
     id: null
-  };
-  res.status(200).json(payload);
+  }));
 };
 
 app.get('/mcp', methodNotAllowed);
 app.delete('/mcp', methodNotAllowed);
 
-app.get('/health', (req, res) => {
-  const payload = {
-    status: 'ok'
-  };
-  res.status(200).json(payload);
-});
-
 app.listen(config.port, (error) => {
   if (error) {
+    logger.error('Failed to start server', { error: error?.message });
     process.exit(1);
   }
+  logger.info('MCP server listening', { port: config.port });
 });
