@@ -11,25 +11,6 @@ const app = createMcpExpressApp({
   allowedHosts: config.mcpAllowedHosts || undefined
 });
 
-app.use((req, res, next) => {
-  const logResponse = (body) => {
-    if (res.locals?.__responseLogged) return;
-    res.locals.__responseLogged = true;
-    logger.info('HTTP response', { statusCode: res.statusCode, body });
-  };
-  const originalJson = res.json.bind(res);
-  res.json = (body) => {
-    logResponse(body);
-    return originalJson(body);
-  };
-  const originalSend = res.send.bind(res);
-  res.send = (body) => {
-    logResponse(body);
-    return originalSend(body);
-  };
-  next();
-});
-
 app.use(createContextMiddleware({ audience: config.contextAudience }));
 
 app.post('/mcp', async (req, res) => {
