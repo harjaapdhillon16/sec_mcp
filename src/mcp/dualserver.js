@@ -360,17 +360,17 @@ const handleLatestIntel = async (args, extra, logger) => {
         return jsonResponse(logger, { ...payload, sections: [] });
       }
 
-      const hasSections =
+      const hasStoredSections =
         Array.isArray(payload.sections) && payload.sections.length > 0;
-      if (hasSections) {
+      if (hasStoredSections) {
         return jsonResponse(logger, payload);
       }
 
       const sectionMap = await buildSectionMapForFiling(filing);
-      const hasSections = DEFAULT_SECTIONS.some(
+      const hasSectionContent = DEFAULT_SECTIONS.some(
         (sectionType) => sectionMap[sectionType]
       );
-      if (hasSections) {
+      if (hasSectionContent) {
         const facts = await buildFactsForFiling(company.cik, filing);
         const previous = await getPreviousFiling(
           company.cik,
