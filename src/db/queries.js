@@ -368,14 +368,30 @@ export const searchChunksByEmbedding = async ({
   cik,
   embedding,
   limit = 8,
-  sectionType = null
+  sectionType = null,
+  minFilingDate = null,
+  maxFilingDate = null
 }) => {
-  const params = [toVectorLiteral(embedding), cik, limit];
-  let filter = '';
+  const params = [toVectorLiteral(embedding), cik];
+  const filters = [];
+  let paramIndex = 3;
+
   if (sectionType) {
-    filter = 'AND c.section_type = $4';
+    filters.push(`c.section_type = $${paramIndex++}`);
     params.push(sectionType);
   }
+  if (minFilingDate) {
+    filters.push(`f.filing_date >= $${paramIndex++}`);
+    params.push(minFilingDate);
+  }
+  if (maxFilingDate) {
+    filters.push(`f.filing_date <= $${paramIndex++}`);
+    params.push(maxFilingDate);
+  }
+
+  const filter = filters.length ? `AND ${filters.join(' AND ')}` : '';
+  const limitIndex = paramIndex++;
+  params.push(limit);
   const result = await db.query(
     `
     SELECT c.id, c.text, c.section_type, c.filing_id,
@@ -385,8 +401,8 @@ export const searchChunksByEmbedding = async ({
     JOIN filings f ON f.id = c.filing_id
     WHERE f.cik = $2
     ${filter}
-    ORDER BY c.embedding <=> $1::vector
-    LIMIT $3
+    ORDER BY c.embedding <=> $1::vector, f.filing_date DESC
+    LIMIT $${limitIndex}
     `,
     params
   );

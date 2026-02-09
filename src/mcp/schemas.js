@@ -93,6 +93,7 @@ const LatestIntelSuccessSchema = {
 };
 
 export const LatestIntelOutputSchema = {
+  type: 'object',
   oneOf: [LatestIntelSuccessSchema, ErrorOutputSchema]
 };
 
@@ -188,6 +189,7 @@ const CompareSuccessSchema = {
 };
 
 export const CompareOutputSchema = {
+  type: 'object',
   oneOf: [CompareSuccessSchema, ErrorOutputSchema]
 };
 
@@ -198,7 +200,15 @@ export const SemanticSearchInputSchema = {
     cik: { type: 'string' },
     query: { type: 'string', description: 'Search query' },
     sectionType: { type: 'string' },
-    limit: { type: 'number', default: 6 }
+    limit: { type: 'number', default: 6 },
+    minFilingDate: {
+      type: 'string',
+      description: 'Earliest filing date to include (YYYY-MM-DD)'
+    },
+    maxFilingDate: {
+      type: 'string',
+      description: 'Latest filing date to include (YYYY-MM-DD)'
+    }
   },
   required: ['query']
 };
@@ -238,6 +248,7 @@ const SemanticSearchSuccessSchema = {
 };
 
 export const SemanticSearchOutputSchema = {
+  type: 'object',
   oneOf: [SemanticSearchSuccessSchema, ErrorOutputSchema]
 };
 
@@ -276,5 +287,6 @@ const EarningsSuccessSchema = {
 };
 
 export const EarningsOutputSchema = {
+  type: 'object',
   oneOf: [EarningsSuccessSchema, ErrorOutputSchema]
 };

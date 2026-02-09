@@ -44,6 +44,7 @@ import { compareSections } from '../lib/compare.js';
 import { logger as rootLogger } from '../lib/logger.js';
 import { buildLatestIntelFallback } from '../lib/fallbackIntel.js';
 import { enqueueIngest } from '../lib/ingestQueue.js';
+import { extractSections } from '../lib/filingParser.js';
 import { Server } from '@modelcontextprotocol/sdk/server';
 
 /* -------------------------------------------------------------------------- */
@@ -118,6 +119,22 @@ const buildFactsForFiling = async (cik, filing) => {
   }
 
   return getLatestFactsByTag(cik, tags);
+};
+
+const buildSectionMapForFiling = async (filing) => {
+  if (!filing) return {};
+  const sections = await getSectionsByFiling(filing.id);
+  if (sections?.length) {
+    const sectionMap = {};
+    for (const section of sections) {
+      sectionMap[section.section_type] = section.content_text;
+    }
+    return sectionMap;
+  }
+  if (filing.raw_text) {
+    return extractSections(filing.raw_text);
+  }
+  return {};
 };
 
 /* -------------------------------------------------------------------------- */
@@ -263,6 +280,7 @@ const createStreamLogger = (
 
 const handleLatestIntel = async (args, extra, logger) => {
   const { ticker, cik, formType, includeSections } = args || {};
+  const wantSections = Boolean(includeSections);
   const streamLog = createStreamLogger(extra);
 
   try {
@@ -331,24 +349,64 @@ const handleLatestIntel = async (args, extra, logger) => {
         } catch {}
       }
 
-      if (
-        payload &&
-        typeof payload === 'object' &&
-        !Array.isArray(payload) &&
-        !includeSections
-      ) {
+      const isObject =
+        payload && typeof payload === 'object' && !Array.isArray(payload);
+
+      if (!isObject) {
+        return jsonResponse(logger, payload);
+      }
+
+      if (!wantSections) {
+        return jsonResponse(logger, { ...payload, sections: [] });
+      }
+
+      const hasSections =
+        Array.isArray(payload.sections) && payload.sections.length > 0;
+      if (hasSections) {
+        return jsonResponse(logger, payload);
+      }
+
+      const sectionMap = await buildSectionMapForFiling(filing);
+      const hasSections = DEFAULT_SECTIONS.some(
+        (sectionType) => sectionMap[sectionType]
+      );
+      if (hasSections) {
+        const facts = await buildFactsForFiling(company.cik, filing);
+        const previous = await getPreviousFiling(
+          company.cik,
+          filing.form_type,
+          filing.filing_date
+        );
+        const previousFacts = previous
+          ? await buildFactsForFiling(company.cik, previous)
+          : [];
+
+        const rebuilt = buildLatestIntel({
+          company,
+          filing,
+          sections: sectionMap,
+          facts,
+          previousFacts,
+        });
+
+        await upsertIntelReport({
+          cik: company.cik,
+          filingId: filing.id,
+          reportType: 'latest_summary',
+          dataJson: rebuilt,
+        });
+
+        return jsonResponse(logger, rebuilt);
+      }
+
+      if (!Array.isArray(payload.sections)) {
         payload = { ...payload, sections: [] };
       }
 
       return jsonResponse(logger, payload);
     }
 
-    const sections = await getSectionsByFiling(filing.id);
-    const sectionMap = {};
-
-    for (const section of sections) {
-      sectionMap[section.section_type] = section.content_text;
-    }
+    const sectionMap = await buildSectionMapForFiling(filing);
 
     const facts = await buildFactsForFiling(company.cik, filing);
 
@@ -370,8 +428,6 @@ const handleLatestIntel = async (args, extra, logger) => {
       previousFacts,
     });
 
-    if (!includeSections) intel.sections = [];
-
     await upsertIntelReport({
       cik: company.cik,
       filingId: filing.id,
@@ -379,7 +435,11 @@ const handleLatestIntel = async (args, extra, logger) => {
       dataJson: intel,
     });
 
-    return jsonResponse(logger, intel);
+    const responsePayload = wantSections
+      ? intel
+      : { ...intel, sections: [] };
+
+    return jsonResponse(logger, responsePayload);
   } catch (error) {
     return errorResponse(logger, error?.message || 'Unknown error');
   } finally {
@@ -476,7 +536,15 @@ const handleCompareLatest = async (args, logger) => {
 };
 
 const handleSemanticSearch = async (args, logger) => {
-  const { ticker, cik, query, sectionType, limit } = args || {};
+  const {
+    ticker,
+    cik,
+    query,
+    sectionType,
+    limit,
+    minFilingDate,
+    maxFilingDate,
+  } = args || {};
   
   try {
     const company = await resolveCompany({ ticker, cik });
@@ -487,6 +555,8 @@ const handleSemanticSearch = async (args, logger) => {
       embedding,
       limit: limit || 6,
       sectionType: sectionType || null,
+      minFilingDate: minFilingDate || null,
+      maxFilingDate: maxFilingDate || null,
     });
     
     const matches = rows.map((row) => ({
