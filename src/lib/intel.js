@@ -29,7 +29,7 @@ export const computeMetricDeltas = (currentFacts, previousFacts) => {
 
 const sentimentScore = (text) => {
   const words = tokenizeWords(text);
-  if (!words.length) return null;
+  if (!words.length) return 0;
   const neg = words.filter(w => NEGATIVE_TERMS.includes(w)).length;
   const pos = words.filter(w => POSITIVE_TERMS.includes(w)).length;
   const raw = (pos - neg) / words.length;
@@ -54,7 +54,7 @@ export const buildRiskSummary = (text) => {
     return {
       summary: 'No risk factors section available.',
       highlights: [],
-      sentimentScore: null
+      sentimentScore: 0
     };
   }
   const highlights = extractHighlights(text);
@@ -98,7 +98,7 @@ export const buildLatestIntel = ({ company, filing, sections, facts, previousFac
   if (topDelta && topDelta.deltaPct !== null) {
     signals.push(`Watch ${topDelta.label} movement (${(topDelta.deltaPct * 100).toFixed(1)}%).`);
   }
-  if (riskSummary.sentimentScore !== null && riskSummary.sentimentScore < -0.2) {
+  if (riskSummary.sentimentScore < -0.2) {
     signals.push('Risk tone skewed negative vs. baseline.');
   }
   const sectionSummaries = Object.entries(sections)

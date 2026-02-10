@@ -246,14 +246,14 @@ const buildSystemPrompt = () => (
     '  \"riskSummary\": {',
     '    \"summary\": \"string\",',
     '    \"highlights\": [\"string\"],',
-    '    \"sentimentScore\": number | null',
+    '    \"sentimentScore\": number',
     '  }',
     '}',
     'Constraints:',
     '- takeaways max 5 items',
     '- signals max 5 items',
     '- highlights max 3 items',
-    '- sentimentScore between -1 and 1 (or null)',
+    '- sentimentScore between -1 and 1',
     'Be concise and avoid speculation.'
   ].join('\n')
 );

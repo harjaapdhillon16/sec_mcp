@@ -59,7 +59,10 @@ const LatestIntelSuccessSchema = {
       properties: {
         summary: { type: 'string' },
         highlights: { type: 'array', items: { type: 'string' } },
-        sentimentScore: { type: ['number', 'null'] }
+        sentimentScore: {
+          type: 'number',
+          description: 'Sentiment score from -1 to 1 (0 when no risk factors section exists).'
+        }
       },
       required: ['summary', 'highlights', 'sentimentScore']
     },
