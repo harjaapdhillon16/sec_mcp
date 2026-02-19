@@ -8,8 +8,6 @@ import { chunkText } from '../lib/chunker.js';
 import { embedTexts } from '../lib/embeddings.js';
 import { sha256, cleanText, normalizeTicker } from '../lib/utils.js';
 import { KEY_TAGS } from '../lib/constants.js';
-import { fetchTranscriptDates, fetchTranscript, pickLatestTranscriptDate, extractTranscriptText } from '../lib/fmp.js';
-import { ingestEarningsTranscript } from '../lib/earningsPipeline.js';
 import {
   normalizeCik,
   upsertCompany,
@@ -112,9 +110,6 @@ export const ingestCompany = async ({
   const submissions = await getSubmissions(cikResolved);
   const companyName = submissions?.name || null;
   await upsertCompany({ cik: cikResolved, ticker: tickerArg, name: companyName });
-  const companyRecord = await getCompanyByCik(cikResolved);
-  const transcriptTicker = tickerArg || companyRecord?.ticker || null;
-
   const recent = submissions?.filings?.recent;
   if (!recent) throw new Error('No recent filings found');
 
@@ -199,30 +194,6 @@ export const ingestCompany = async ({
   const factsJson = await getCompanyFacts(cikResolved);
   const facts = buildFacts(cikResolved, factsJson, filings);
   await insertXbrlFacts(facts);
-  if (config.fmpApiKey && transcriptTicker) {
-    try {
-      const list = await fetchTranscriptDates(transcriptTicker);
-      const latest = pickLatestTranscriptDate(list);
-      if (latest?.year && latest?.quarter) {
-        const transcriptPayload = await fetchTranscript(
-          transcriptTicker,
-          latest.year,
-          latest.quarter
-        );
-        const transcriptText = extractTranscriptText(transcriptPayload);
-        await ingestEarningsTranscript({
-          cik: cikResolved,
-          ticker: transcriptTicker,
-          callDate: latest.date || null,
-          fiscalYear: latest.year || null,
-          fiscalQuarter: latest.quarter || null,
-          transcriptText,
-          source: 'fmp'
-        });
-      }
-    } catch (error) {
-    }
-  }
 };
 
 const ingest = async () => {
@@ -237,7 +208,7 @@ const ingest = async () => {
 
 const isCli = import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isCli) {
-  ingest().catch(error => {
+  ingest().catch(() => {
     process.exit(1);
   });
 }

@@ -27,8 +27,6 @@ export const config = {
   tavilyApiKey: process.env.TAVILY_API_KEY,
   tavilyMaxResults: parseIntSafe(process.env.TAVILY_MAX_RESULTS, 3),
   tavilyTimeoutMs: parseIntSafe(process.env.TAVILY_TIMEOUT_MS, 10000),
-  transcriptProvider: process.env.TRANSCRIPT_PROVIDER || 'fmp',
-  fmpApiKey: process.env.FMP_API_KEY,
   chunkMaxWords: parseIntSafe(process.env.CHUNK_MAX_WORDS, 900),
   chunkOverlapWords: parseIntSafe(process.env.CHUNK_OVERLAP_WORDS, 120),
   ingestFilingConcurrency: parseIntSafe(process.env.INGEST_FILING_CONCURRENCY, 1),
