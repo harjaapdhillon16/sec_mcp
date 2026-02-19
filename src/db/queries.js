@@ -499,3 +499,167 @@ export const getEarningsIntel = async ({ cik, fiscalYear, fiscalQuarter }) => {
   );
   return result.rows[0] || null;
 };
+
+// Get raw earnings call record including transcript_text (for Q&A analysis)
+export const getEarningsCall = async ({ cik, fiscalYear, fiscalQuarter }) => {
+  const result = await db.query(
+    `
+    SELECT *
+    FROM earnings_calls
+    WHERE cik = $1
+      AND ($2::int IS NULL OR fiscal_year = $2)
+      AND ($3::int IS NULL OR fiscal_quarter = $3)
+    ORDER BY fiscal_year DESC NULLS LAST, fiscal_quarter DESC NULLS LAST,
+             call_date DESC NULLS LAST
+    LIMIT 1
+    `,
+    [cik, fiscalYear || null, fiscalQuarter || null]
+  );
+  return result.rows[0] || null;
+};
+
+// Get all earnings intel + transcript text for a company, ordered newest first
+export const getAllEarningsIntel = async (cik, limit = 12) => {
+  const result = await db.query(
+    `
+    SELECT e.id, e.call_date, e.cik, e.ticker,
+           e.fiscal_year, e.fiscal_quarter, e.transcript_text,
+           i.data_json
+    FROM earnings_calls e
+    LEFT JOIN earnings_intel i ON i.call_id = e.id
+    WHERE e.cik = $1
+    ORDER BY e.fiscal_year DESC NULLS LAST, e.fiscal_quarter DESC NULLS LAST,
+             e.call_date DESC NULLS LAST
+    LIMIT $2
+    `,
+    [cik, limit]
+  );
+  return result.rows;
+};
+
+// Get recent filings for a company ordered by date (for anomaly baseline)
+export const getFilingHistory = async (cik, formType = null, limit = 8) => {
+  const result = await db.query(
+    `
+    SELECT id, cik, form_type, filing_date, report_period, primary_doc_url
+    FROM filings
+    WHERE cik = $1
+      AND ($2::text IS NULL OR form_type = $2)
+    ORDER BY filing_date DESC
+    LIMIT $3
+    `,
+    [cik, formType, limit]
+  );
+  return result.rows;
+};
+
+// Get all XBRL facts for a company across all periods (for derived metric history)
+export const getFactsAllPeriods = async (cik, tags) => {
+  const result = await db.query(
+    `
+    SELECT *
+    FROM xbrl_facts
+    WHERE cik = $1 AND tag = ANY($2)
+    ORDER BY end_date DESC
+    LIMIT 100
+    `,
+    [cik, tags]
+  );
+  return result.rows;
+};
+
+// Semantic search across ALL companies (no cik filter), optional ticker filter
+export const searchChunksCrossCompany = async ({
+  embedding,
+  tickers = [],
+  sectionType = null,
+  minScore = 0.3,
+  limit = 50,
+  lookbackDays = null,
+}) => {
+  const vectorLiteral = toVectorLiteral(embedding);
+  const params = [vectorLiteral];
+  const filters = [];
+  let paramIndex = 2;
+
+  if (tickers.length > 0) {
+    filters.push(`co.ticker = ANY($${paramIndex++})`);
+    params.push(tickers);
+  }
+  if (sectionType) {
+    filters.push(`c.section_type = $${paramIndex++}`);
+    params.push(sectionType);
+  }
+  if (lookbackDays) {
+    filters.push(`f.filing_date >= CURRENT_DATE - ($${paramIndex++} * INTERVAL '1 day')`);
+    params.push(lookbackDays);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const limitIndex = paramIndex++;
+  params.push(limit);
+
+  const result = await db.query(
+    `
+    SELECT c.id, c.text, c.section_type, c.filing_id,
+           f.form_type, f.filing_date, f.cik,
+           co.ticker,
+           (1 - (c.embedding <=> $1::vector)) AS score
+    FROM filing_chunks c
+    JOIN filings f ON f.id = c.filing_id
+    JOIN companies co ON co.cik = f.cik
+    ${whereClause}
+    ORDER BY c.embedding <=> $1::vector
+    LIMIT $${limitIndex}
+    `,
+    params
+  );
+
+  // Filter by minScore in application layer to preserve HNSW index usage
+  return result.rows.filter((row) => Number(row.score) >= minScore);
+};
+
+// Full-text keyword search across filing chunks (for sector drift detection)
+export const searchTextInChunks = async ({
+  term,
+  tickers = [],
+  sectionType = null,
+  limit = 60,
+  lookbackDays = null,
+}) => {
+  const params = [`%${term}%`];
+  const filters = [`c.text ILIKE $1`];
+  let paramIndex = 2;
+
+  if (tickers.length > 0) {
+    filters.push(`co.ticker = ANY($${paramIndex++})`);
+    params.push(tickers);
+  }
+  if (sectionType) {
+    filters.push(`c.section_type = $${paramIndex++}`);
+    params.push(sectionType);
+  }
+  if (lookbackDays) {
+    filters.push(`f.filing_date >= CURRENT_DATE - ($${paramIndex++} * INTERVAL '1 day')`);
+    params.push(lookbackDays);
+  }
+
+  const limitIndex = paramIndex++;
+  params.push(limit);
+
+  const result = await db.query(
+    `
+    SELECT c.id, c.text, c.section_type, c.filing_id,
+           f.form_type, f.filing_date, f.cik,
+           co.ticker
+    FROM filing_chunks c
+    JOIN filings f ON f.id = c.filing_id
+    JOIN companies co ON co.cik = f.cik
+    WHERE ${filters.join(' AND ')}
+    ORDER BY f.filing_date DESC
+    LIMIT $${limitIndex}
+    `,
+    params
+  );
+  return result.rows;
+};

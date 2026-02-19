@@ -293,3 +293,369 @@ export const EarningsOutputSchema = {
   type: 'object',
   oneOf: [EarningsSuccessSchema, ErrorOutputSchema]
 };
+
+/* -------------------------------------------------------------------------- */
+/*                         CROSS-COMPANY SCAN                                 */
+/* -------------------------------------------------------------------------- */
+
+export const CrossCompanyScanInputSchema = {
+  type: 'object',
+  properties: {
+    query: {
+      type: 'string',
+      description: 'Semantic query to find across all company filings'
+    },
+    tickers: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Optional: restrict to these tickers. If omitted, searches all ingested companies.'
+    },
+    sectionType: {
+      type: 'string',
+      description: 'Optional: restrict to a specific filing section (e.g. risk_factors, mdna)'
+    },
+    limit: { type: 'number', default: 20 },
+    lookbackDays: {
+      type: 'number',
+      description: 'Only search filings filed within the last N days'
+    },
+    minScore: { type: 'number', default: 0.3 }
+  },
+  required: ['query']
+};
+
+export const CrossCompanyScanOutputSchema = {
+  type: 'object',
+  properties: {
+    query: { type: 'string' },
+    companiesFound: { type: 'number' },
+    companies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          cik: { type: 'string' },
+          ticker: { type: ['string', 'null'] },
+          topScore: { type: 'number' },
+          matches: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                filingDate: { type: 'string' },
+                formType: { type: 'string' },
+                sectionType: { type: 'string' },
+                score: { type: 'number' },
+                snippet: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  required: ['query', 'companiesFound', 'companies']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                           DERIVED METRICS                                  */
+/* -------------------------------------------------------------------------- */
+
+export const DerivedMetricsInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' }
+  }
+};
+
+export const DerivedMetricsOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    filingDate: { type: ['string', 'null'] },
+    reportPeriod: { type: ['string', 'null'] },
+    derivedMetrics: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          value: { type: 'number' },
+          formula: { type: 'string' },
+          description: { type: 'string' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+        },
+        required: ['name', 'value', 'formula', 'description', 'confidence']
+      }
+    },
+    missingInputs: { type: 'array', items: { type: 'string' } }
+  },
+  required: ['cik', 'ticker', 'filingDate', 'reportPeriod', 'derivedMetrics', 'missingInputs']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                        MANAGEMENT CREDIBILITY                              */
+/* -------------------------------------------------------------------------- */
+
+export const ManagementCredibilityInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    periods: {
+      type: 'number',
+      default: 8,
+      description: 'Number of earnings call quarters to analyze'
+    }
+  }
+};
+
+export const ManagementCredibilityOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    periodsAnalyzed: { type: 'number' },
+    overallCredibilityScore: { type: ['number', 'null'] },
+    hedgingTrend: { type: 'string' },
+    toneProgression: { type: 'string' },
+    history: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fiscalYear: { type: ['number', 'null'] },
+          fiscalQuarter: { type: ['number', 'null'] },
+          callDate: { type: ['string', 'null'] },
+          tone: { type: ['string', 'null'] },
+          hedgingDensity: { type: 'number' },
+          guidanceCount: { type: 'number' },
+          guidanceStatements: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    }
+  },
+  required: ['cik', 'ticker', 'periodsAnalyzed', 'overallCredibilityScore', 'hedgingTrend', 'toneProgression', 'history']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                           FILING ANOMALY                                   */
+/* -------------------------------------------------------------------------- */
+
+export const FilingAnomalyInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' }
+  }
+};
+
+export const FilingAnomalyOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    filingDate: { type: ['string', 'null'] },
+    formType: { type: 'string' },
+    reportPeriod: { type: ['string', 'null'] },
+    anomalyScore: { type: 'number', description: '0 = normal, 1 = highly anomalous' },
+    flags: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string' },
+          severity: { type: 'string', enum: ['low', 'medium', 'high'] },
+          description: { type: 'string' },
+          evidence: { type: 'string' }
+        },
+        required: ['type', 'severity', 'description', 'evidence']
+      }
+    },
+    baseline: { type: 'object' }
+  },
+  required: ['cik', 'ticker', 'filingDate', 'formType', 'reportPeriod', 'anomalyScore', 'flags', 'baseline']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                            EARNINGS Q&A                                    */
+/* -------------------------------------------------------------------------- */
+
+export const EarningsQaInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    year: { type: 'number' },
+    quarter: { type: 'number' }
+  }
+};
+
+export const EarningsQaOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    callDate: { type: ['string', 'null'] },
+    totalQuestions: { type: 'number' },
+    deflectionRate: { type: 'number' },
+    analystThemes: { type: 'array', items: { type: 'string' } },
+    deflectedTopics: { type: 'array', items: { type: 'string' } },
+    firstTimeMentions: { type: 'array', items: { type: 'string' } },
+    qaExcerpts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          speaker: { type: 'string' },
+          question: { type: 'string' },
+          response: { type: ['string', 'null'] },
+          deflected: { type: 'boolean' }
+        }
+      }
+    }
+  },
+  required: ['cik', 'ticker', 'callDate', 'totalQuestions', 'deflectionRate', 'analystThemes', 'deflectedTopics', 'firstTimeMentions', 'qaExcerpts']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                          LONGITUDINAL TONE                                 */
+/* -------------------------------------------------------------------------- */
+
+export const LongitudinalToneInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    periods: { type: 'number', default: 8 }
+  }
+};
+
+export const LongitudinalToneOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    periodsAnalyzed: { type: 'number' },
+    periods: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fiscalYear: { type: ['number', 'null'] },
+          fiscalQuarter: { type: ['number', 'null'] },
+          callDate: { type: ['string', 'null'] },
+          earningsTone: { type: ['string', 'null'] },
+          guidanceCount: { type: 'number' },
+          hedgingDensity: { type: 'number' }
+        }
+      }
+    },
+    trendSummary: { type: 'string' }
+  },
+  required: ['cik', 'ticker', 'periodsAnalyzed', 'periods', 'trendSummary']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                            SECTOR DRIFT                                    */
+/* -------------------------------------------------------------------------- */
+
+export const SectorDriftInputSchema = {
+  type: 'object',
+  properties: {
+    term: {
+      type: 'string',
+      description: 'Term or phrase to track across all filings'
+    },
+    tickers: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Optional: restrict to these tickers'
+    },
+    lookbackDays: {
+      type: 'number',
+      default: 90,
+      description: 'Window for "recent" filings'
+    },
+    limit: { type: 'number', default: 30 }
+  },
+  required: ['term']
+};
+
+export const SectorDriftOutputSchema = {
+  type: 'object',
+  properties: {
+    term: { type: 'string' },
+    lookbackDays: { type: 'number' },
+    recentMentions: { type: 'number' },
+    historicalMentions: { type: 'number' },
+    driftScore: { type: ['number', 'null'] },
+    emergingCompanies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          cik: { type: 'string' },
+          ticker: { type: ['string', 'null'] },
+          filingDate: { type: 'string' },
+          formType: { type: 'string' },
+          sectionType: { type: 'string' },
+          snippet: { type: 'string' }
+        }
+      }
+    }
+  },
+  required: ['term', 'lookbackDays', 'recentMentions', 'historicalMentions', 'driftScore', 'emergingCompanies']
+};
+
+/* -------------------------------------------------------------------------- */
+/*                          COMPANY MENTIONS                                  */
+/* -------------------------------------------------------------------------- */
+
+export const CompanyMentionsInputSchema = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string' },
+    cik: { type: 'string' },
+    sectionTypes: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Sections to search. Defaults to ["business", "mdna"]'
+    }
+  }
+};
+
+export const CompanyMentionsOutputSchema = {
+  type: 'object',
+  properties: {
+    cik: { type: 'string' },
+    ticker: { type: ['string', 'null'] },
+    filingDate: { type: ['string', 'null'] },
+    mentionsFound: { type: 'number' },
+    mentions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          mentionedTicker: { type: ['string', 'null'] },
+          mentionedName: { type: 'string' },
+          relationshipKeywords: { type: 'array', items: { type: 'string' } },
+          sentences: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    },
+    relationshipSentences: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          relationshipType: { type: 'string' },
+          sentence: { type: 'string' }
+        }
+      }
+    }
+  },
+  required: ['cik', 'ticker', 'filingDate', 'mentionsFound', 'mentions', 'relationshipSentences']
+};
